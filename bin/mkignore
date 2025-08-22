@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# mkignore - create .gitignore from GitHub templates
+
+HELPERS_DIR="$HOME/.mkgit/helpers"
+[[ -f "$HELPERS_DIR/emoji_helper.sh" ]] && source "$HELPERS_DIR/emoji_helper.sh"
+
+USAGE=$(cat <<'EOF'
+Usage: mkignore [options]
+
+Options:
+  -l, --list                List available templates
+  -s, --search QUERY        Search for templates matching QUERY
+  -u, --use TEMPLATE[,TEMPLATE2,...]  Create .gitignore using specified template(s)
+  -h, --help                Show this help
+
+Examples:
+  mkignore -u Python
+  mkignore --use Python,Node
+  mkignore --list
+  mkignore --search python
+EOF
+)
+
+TEMPLATES_API="https://api.github.com/gitignore/templates"
+
+usage() {
+    echo "$USAGE"
+}
+
+api_get() {
+    local url="$1"
+    if command -v gh >/dev/null 2>&1; then
+        gh api "$url"
+    else
+        curl -fsSL "$url"
+    fi
+}
+
+do_list() {
+    local list
+    list="$(api_get "$TEMPLATES_API")" || { echo "Failed to fetch templates"; exit 1; }
+    echo "$list" | jq -r '.[]' | sort
+}
+
+do_search() {
+    local query="$1"
+    [[ -z "$query" ]] && { echo "Search query required"; exit 1; }
+    local list
+    list="$(api_get "$TEMPLATES_API")" || { echo "Failed to fetch templates"; exit 1; }
+    echo "$list" | jq -r ".[] | select(test(\"$query\";\"i\"))" | sort
+}
+
+create_gitignore() {
+    local templates="$1"
+    [[ -z "$templates" ]] && { emoji_error "No templates specified"; usage; exit 1; }
+    local first=1
+    > .gitignore
+    IFS=',' read -ra tpl <<< "$templates"
+    for t in "${tpl[@]}"; do
+        t=$(echo "$t" | xargs)  # trim spaces
+        local json body
+        json="$(api_get "$TEMPLATES_API/$t")" || { emoji_warning "Template '$t' not found"; continue; }
+        body="$(echo "$json" | jq -r '.source // empty')"
+        [[ -n "$body" ]] && {
+            (( first == 0 )) && echo -e "\n# --- NEXT TEMPLATE ---\n" >> .gitignore
+            echo "$body" >> .gitignore
+            first=0
+        }
+    done
+    emoji_success ".gitignore created with template(s): $templates"
+}
+
+# --------- arg parsing ---------
+LIST=false
+SEARCH=""
+USE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -l|--list) LIST=true; shift ;;
+        -s|--search) SEARCH="${2:-}"; shift 2 ;;
+        -u|--use) USE="${2:-}"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        --) shift; break ;;
+        -*)
+            echo "Unknown option: $1"
+            usage; exit 1 ;;
+        *)
+            if [[ -z "$USE" ]]; then
+                USE="$1"; shift
+            else
+                echo "Unexpected argument: $1"
+                usage; exit 1
+            fi
+            ;;
+    esac
+done
+
+# --------- execute ---------
+if $LIST; then
+    do_list
+    exit 0
+fi
+
+if [[ -n "$SEARCH" ]]; then
+    do_search "$SEARCH"
+    exit 0
+fi
+
+if [[ -n "$USE" ]]; then
+    create_gitignore "$USE"
+    exit 0
+fi
+
+# No args: show help
+usage
+exit 0
+

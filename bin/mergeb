@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# mergeb - merge branch-a into branch-b
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+usage() {
+    cat <<EOF
+Usage: mergeb [options] branch-a branch-b
+Merges branch-a into branch-b.
+EOF
+}
+
+[[ $1 == "-h" || $1 == "--help" ]] && { usage; exit 0; }
+
+branch_a="$1"
+branch_b="$2"
+
+[[ -z $branch_a || -z $branch_b ]] && { emoji_error "Provide two branches to merge."; exit 1; }
+
+# Checkout branch-b before merging
+git checkout "$branch_b" || { emoji_error "Failed to checkout '$branch_b'."; exit 1; }
+
+git merge "$branch_a" || { emoji_error "Merge failed."; exit 1; }
+
+emoji_success "Merged $(nf_branch) $branch_a into $(nf_branch) $branch_b."
+

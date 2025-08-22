@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# mklicense - create LICENSE.txt via GitHub's license API
+
+HELPERS_DIR="$HOME/.mkgit/helpers"
+[[ -f "$HELPERS_DIR/emoji_helper.sh" ]] && source "$HELPERS_DIR/emoji_helper.sh"
+
+LICENSE_API="https://api.github.com/licenses"
+OUTFILE="LICENSE.txt"
+
+usage() {
+    cat <<EOF
+Usage: mklicense [options] [license-key]
+
+Create a LICENSE.txt from GitHub's license API. Requires -u/--use or positional license-key.
+
+Options:
+  -l, --list                 List available licenses (key, name, short description)
+  -s, --search QUERY         Search licenses by key/name/SPDX (case-insensitive)
+  -u, --use KEY              Use the given license key (creates LICENSE.txt)
+  -h, --help                 Show this help
+
+Examples:
+  mklicense -u mit            # create MIT license
+  mklicense apache-2.0        # create Apache-2.0 license
+  mklicense --list            # show all licenses with descriptions
+  mklicense --search gpl      # search keys/names containing 'gpl'
+EOF
+}
+
+api_get() {
+    local url="$1"
+    if command -v gh >/dev/null 2>&1; then
+        gh api "$url"
+    else
+        curl -fsSL "$url"
+    fi
+}
+
+print_table_header() {
+    local key_w=18 spdx_w=12 name_w=28
+    printf "%-*s  %-*s  %-*s  %s\n" "$key_w" "KEY" "$spdx_w" "SPDX" "$name_w" "NAME" "DESCRIPTION"
+    printf "%-*s  %-*s  %-*s  %s\n" "$key_w" "───" "$spdx_w" "────" "$name_w" "────" "───────────"
+}
+
+print_table_row() {
+    local key="$1" spdx="$2" name="$3" desc="$4"
+    local cols=120 key_w=18 spdx_w=12 name_w=28
+    if command -v tput >/dev/null 2>&1; then
+        cols=$(tput cols 2>/dev/null || echo 120)
+    fi
+    _trunc() {
+        local s="$1" w="$2"
+        local len=${#s}
+        (( len > w )) && s="${s:0:w-1}"
+        printf "%s" "$s"
+    }
+    local used=$((key_w + 2 + spdx_w + 2 + name_w + 2))
+    local desc_w=$(( cols - used ))
+    (( desc_w < 20 )) && desc_w=20
+    printf "%-*s  %-*s  %-*s  %s\n" \
+        "$key_w" "$(_trunc "$key" "$key_w")" \
+        "$spdx_w" "$(_trunc "$spdx" "$spdx_w")" \
+        "$name_w" "$(_trunc "$name" "$name_w")" \
+        "$(_trunc "$desc" "$desc_w")"
+}
+
+do_list() {
+    local list_json
+    list_json="$(api_get "$LICENSE_API")" || { echo "Failed to fetch license list."; exit 1; }
+    print_table_header
+    echo "$list_json" | jq -r '.[] | [.key, .spdx_id, .name] | @tsv' | while IFS=$'\t' read -r key spdx name; do
+        [[ "$spdx" == "null" ]] && spdx=""
+        local detail desc
+        detail="$(api_get "$LICENSE_API/$key")" || continue
+        desc="$(echo "$detail" | jq -r '.description // .implementation // ""')"
+        print_table_row "$key" "$spdx" "$name" "$desc"
+    done
+}
+
+do_search() {
+    local query="$1"
+    [[ -z "$query" ]] && { echo "Search query required."; exit 1; }
+    local list_json
+    list_json="$(api_get "$LICENSE_API")" || { echo "Failed to fetch license list."; exit 1; }
+    print_table_header
+    echo "$list_json" \
+      | jq -r --arg q "$query" '
+          .[]
+          | select((.key|ascii_downcase|test($q;"i"))
+                or (.name|ascii_downcase|test($q;"i"))
+                or (.spdx_id|tostring|ascii_downcase|test($q;"i")))
+          | [.key, .spdx_id, .name] | @tsv' \
+      | while IFS=$'\t' read -r key spdx name; do
+            [[ "$spdx" == "null" ]] && spdx=""
+            local detail desc
+            detail="$(api_get "$LICENSE_API/$key")" || continue
+            desc="$(echo "$detail" | jq -r '.description // .implementation // ""')"
+            print_table_row "$key" "$spdx" "$name" "$desc"
+        done
+}
+
+write_license() {
+    local key="$1"
+    [[ -z "$key" ]] && { emoji_error "No license key provided"; usage; exit 1; }
+    key="$(echo "$key" | tr '[:upper:]' '[:lower:]')"
+    local json body
+    json="$(api_get "$LICENSE_API/$key")" || { emoji_error "Failed to fetch license '$key'."; exit 1; }
+    body="$(echo "$json" | jq -r '.body // empty')"
+    [[ -z "$body" ]] && { emoji_error "License '$key' not found or has no body."; exit 1; }
+    printf "%s\n" "$body" > "$OUTFILE"
+    emoji_success "Created $OUTFILE with '$key' license"
+}
+
+# --------- arg parsing ---------
+LIST=false
+SEARCH=""
+USE_KEY=""
+POSITIONAL_KEY=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -l|--list) LIST=true; shift ;;
+        -s|--search) SEARCH="${2:-}"; shift 2 ;;
+        -u|--use)
+            if [[ -n "${2:-}" && ! "$2" =~ ^- ]]; then
+                USE_KEY="$2"; shift 2
+            else
+                USE_KEY="mit"; shift
+            fi
+            ;;
+        -h|--help) usage; exit 0 ;;
+        --) shift; break ;;
+        -*)
+            echo "Unknown option: $1"
+            usage; exit 1 ;;
+        *)
+            if [[ -z "$POSITIONAL_KEY" ]]; then
+                POSITIONAL_KEY="$1"; shift
+            else
+                echo "Unexpected argument: $1"; usage; exit 1
+            fi
+            ;;
+    esac
+done
+
+# --------- execute ---------
+if $LIST; then
+    do_list
+    exit 0
+fi
+
+if [[ -n "$SEARCH" ]]; then
+    do_search "$SEARCH"
+    exit 0
+fi
+
+if [[ -n "$USE_KEY" ]]; then
+    write_license "$USE_KEY"
+    exit 0
+fi
+
+if [[ -n "$POSITIONAL_KEY" ]]; then
+    write_license "$POSITIONAL_KEY"
+    exit 0
+fi
+
+# No arguments: show help
+usage
+exit 0
+

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# rmb - remove a branch (cannot remove current branch)
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+usage() {
+    cat <<EOF
+Usage: rmb branch-name
+Removes a branch. Cannot remove the current branch.
+EOF
+}
+
+[[ $1 == "-h" || $1 == "--help" ]] && { usage; exit 0; }
+
+branch="$1"
+[[ -z $branch ]] && { emoji_error "Please provide a branch name."; exit 1; }
+
+current=$(git rev-parse --abbrev-ref HEAD)
+
+if [[ $branch == "$current" ]]; then
+    emoji_error "$(nf_branch) Cannot remove the current branch. Switch branches first."
+    exit 1
+fi
+
+git branch -D "$branch"
+emoji_success "$(nf_branch) Branch '$branch' has been removed."
+

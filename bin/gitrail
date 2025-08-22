@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# gitrail - visual git graph / subway map
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+usage() {
+    cat <<EOF
+Usage: gitrail [options]
+
+Options:
+  -b branch         Show only a specific branch
+  -a author         Filter commits by author
+  -f filename       Filter commits that touch a specific file
+  -m message        Filter commits containing a message string
+  -d                Detailed view (author, date, full message)
+  -c                Compact view (graph only, short commit)
+  -h, --help        Display this help
+EOF
+}
+
+# --------------------------
+# Default options
+# --------------------------
+BRANCH=""
+AUTHOR=""
+FILENAME=""
+MESSAGE=""
+DETAILED=false
+COMPACT=false
+
+# --------------------------
+# Parse arguments
+# --------------------------
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -b|--branch) BRANCH="$2"; shift 2 ;;
+        -a|--author) AUTHOR="$2"; shift 2 ;;
+        -f|--file) FILENAME="$2"; shift 2 ;;
+        -m|--message) MESSAGE="$2"; shift 2 ;;
+        -d|--detailed) DETAILED=true; shift ;;
+        -c|--compact) COMPACT=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) emoji_error "Unknown option '$1'"; usage; exit 1 ;;
+    esac
+done
+
+# --------------------------
+# Check git repository
+# --------------------------
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    emoji_error "Not a git repository."
+    exit 1
+fi
+
+# --------------------------
+# Detect terminal width
+# --------------------------
+WIDTH=$(tput cols 2>/dev/null || echo 80)
+
+# --------------------------
+# Build git log command
+# --------------------------
+LOG_CMD="git log --graph --decorate --color --abbrev-commit --all --pretty=format:'"
+
+if [[ $DETAILED == true ]]; then
+    LOG_CMD+="$(nf_branch) %C(yellow)%h%Creset $(map_nf_author)%C(cyan)%an%Creset %C(green)%ad%Creset %s $(map_nf_commit)\%C(red)%d%Creset"
+elif [[ $COMPACT == true ]]; then
+    LOG_CMD+="%h %s"
+else
+    LOG_CMD+="$(nf_branch) %C(yellow)%h%Creset %s $(map_nf_commit)%C(red)%d%Creset"
+fi
+LOG_CMD+="'"
+
+[[ -n $BRANCH ]] && LOG_CMD+=" $BRANCH"
+[[ -n $AUTHOR ]] && LOG_CMD+=" --author='$AUTHOR'"
+[[ -n $FILENAME ]] && LOG_CMD+=" -- $FILENAME"
+[[ -n $MESSAGE ]] && LOG_CMD+=" --grep='$MESSAGE'"
+
+# --------------------------
+# Execute command with width handling
+# --------------------------
+eval "$LOG_CMD" | pr -TW"$WIDTH"
+

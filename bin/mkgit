@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# mkgit - Create a new Git repository interactively with optional GitHub integration
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+[[ -f "$HELPERS_DIR/emoji_helper.sh" ]] && source "$HELPERS_DIR/emoji_helper.sh"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+
+# Default options
+README=false
+LICENSE=false
+GITIGNORE=false
+VISIBILITY="public"
+BRANCH_NAME="main"
+USE_EXISTING_DIR=false
+
+usage() {
+    cat <<EOF
+Usage: mkgit [options] [repo-directory]
+
+Options:
+  -r, --readme           Create README.md
+  -l, --license [name]   Create LICENSE.txt (default MIT)
+  -g, --gitignore [list] Create .gitignore interactively (comma-separated list)
+  -p, --public           Set repository visibility to public
+  -P, --private          Set repository visibility to private
+  -b, --branch [name]    Set default branch name (default: main)
+  -e, --existing         Use existing directory instead of creating new
+  -h, --help             Show this help
+EOF
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -r|--readme) README=true; shift ;;
+        -l|--license) LICENSE_NAME="$2"; LICENSE=true; shift 2 ;;
+        -g|--gitignore) GITIGNORE_LIST="$2"; GITIGNORE=true; shift 2 ;;
+        -p|--public) VISIBILITY="public"; shift ;;
+        -P|--private) VISIBILITY="private"; shift ;;
+        -b|--branch) BRANCH_NAME="$2"; shift 2 ;;
+        -e|--existing) USE_EXISTING_DIR=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) REPO_DIR="$1"; shift ;;
+    esac
+done
+
+# Ask interactively if options were not provided
+[[ -z "$REPO_DIR" ]] && read -rp "Repository directory name: " REPO_DIR
+[[ -z "$BRANCH_NAME" ]] && read -rp "Default branch name [main]: " BRANCH_NAME
+BRANCH_NAME=${BRANCH_NAME:-main}
+
+[[ $README == false ]] && read -rp "Create README.md? (y/N): " yn && [[ "$yn" =~ ^[Yy]$ ]] && README=true
+[[ $LICENSE == false ]] && read -rp "Add LICENSE? (y/N): " yn && [[ "$yn" =~ ^[Yy]$ ]] && LICENSE=true && LICENSE_NAME="mit"
+[[ $GITIGNORE == false ]] && read -rp "Add .gitignore? (y/N): " yn && [[ "$yn" =~ ^[Yy]$ ]] && GITIGNORE=true && GITIGNORE_LIST="Python"
+
+# Create or use directory
+if [[ "$USE_EXISTING_DIR" == true ]]; then
+    [[ ! -d "$REPO_DIR" ]] && emoji_error "Directory '$REPO_DIR' does not exist." && exit 1
+    cd "$REPO_DIR" || exit 1
+else
+    mkdir -p "$REPO_DIR" && cd "$REPO_DIR" || exit 1
+fi
+
+# Initialize git repository
+git init -b "$BRANCH_NAME" >/dev/null 2>&1
+emoji_success "Initialized empty Git repository in $(pwd) with branch '$BRANCH_NAME'"
+
+# README
+[[ $README == true ]] && touch README.md && git add README.md
+
+# LICENSE
+[[ $LICENSE == true ]] && mklicense -u "${LICENSE_NAME:-mit}" && git add LICENSE.txt
+
+# GITIGNORE
+[[ $GITIGNORE == true ]] && mkignore -u "$GITIGNORE_LIST" && git add .gitignore
+
+# Initial commit
+git commit -m "Initial commit" >/dev/null 2>&1
+emoji_success "Initial commit created"
+
+# GitHub integration
+USE_GH=false
+if command -v gh >/dev/null 2>&1; then
+    USE_GH=true
+fi
+
+if $USE_GH; then
+    gh repo create "$REPO_DIR" --"$VISIBILITY" --source=. --remote=origin --push >/dev/null 2>&1
+    emoji_success "GitHub repository created and pushed using gh CLI"
+else
+    read -rp "gh CLI not found. Add remote manually? (y/N): " yn
+    if [[ "$yn" =~ ^[Yy]$ ]]; then
+        read -rp "Enter GitHub repository HTTPS URL: " REPO_URL
+        git remote add origin "$REPO_URL"
+        git push -u origin "$BRANCH_NAME"
+        emoji_success "Remote added and branch pushed"
+    else
+        emoji_warning "No remote configured. You can add one later with git remote add origin <URL>"
+    fi
+fi
+

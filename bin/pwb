@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# pwb - print current git branch
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+usage() {
+    cat <<EOF
+Usage: pwb
+Prints the current git branch.
+EOF
+}
+
+[[ $1 == "-h" || $1 == "--help" ]] && { usage; exit 0; }
+
+current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || {
+    emoji_error "Not a git repository."
+    exit 1
+}
+
+emoji_info "Current branch: $(nf_branch) $current_branch"
+

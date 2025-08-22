@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# githelp - show help for all mkgit-related scripts
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+# --------------------------
+# Usage
+# --------------------------
+usage() {
+    cat <<EOF
+Usage: githelp [section]
+
+Without arguments:    lists all available scripts
+Sections:
+  branching           Shows all branching-related scripts
+  mkgit               Shows mkgit usage
+  lsgit               Shows lsgit usage
+  mklicense           Shows mklicense usage
+  mkignore            Shows mkignore usage
+  githelp             Shows this help
+  gitrail             Shows gitrail usage
+EOF
+}
+
+# --------------------------
+# List top-level scripts
+# --------------------------
+list_all() {
+    cat <<EOF
+Available scripts:
+
+Main commands:
+  mkgit               Create a new git repository interactively
+  lsgit               List repositories and project info
+  mklicense            Create a LICENSE.txt from GitHub templates
+  mkignore             Create a .gitignore from GitHub templates
+  githelp             Show help for all mkgit scripts
+  gitrail             Visual git graph / subway map
+
+Branching commands:
+  pwb                 Print working branch
+  lsb                 List branches or files in a branch
+  cdb                 Change branch
+  mkb                 Create a new branch
+  rmb                 Remove a branch
+  mvb                 Rename a branch
+  cpb                 Copy a branch
+  diffb               Compare two branches
+  mergeb              Merge branch-a into branch-b
+EOF
+}
+
+# --------------------------
+# List branching scripts
+# --------------------------
+list_branching() {
+    cat <<EOF
+Branching commands:
+  pwb                 Print current branch
+  lsb [branch]        List all branches or contents of a branch
+  cdb branch          Change to branch
+  mkb new [base]      Create new branch based on current or specified
+  rmb branch          Remove branch (cannot remove current branch)
+  mvb old new         Rename branch (cannot rename current branch)
+  cpb old new         Copy branch (does not switch)
+  diffb [opts] a b    Compare branches (-t, -d, -s, width auto)
+  mergeb a b          Merge branch-a into branch-b
+EOF
+}
+
+# --------------------------
+# Sectional help
+# --------------------------
+case "$1" in
+    -h|--help) usage ;;
+    "") list_all ;;
+    branching) list_branching ;;
+    mkgit) mkgit -h ;;
+    lsgit) lsgit -h ;;
+    mklicense) mklicense -h ;;
+    mkignore) mkignore -h ;;
+    githelp) usage ;;
+    gitrail) gitrail -h ;;
+    *) emoji_error "Unknown section '$1'"; usage; exit 1 ;;
+esac
+

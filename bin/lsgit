@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+# lsgit - list GitHub repos or project files
+
+set -euo pipefail
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+print_help() {
+cat <<EOF
+Usage:
+  lsgit [options]                   # List repos
+  lsgit <project> [options]         # List files in project or subdirectory
+
+Repo options:
+  -h, --help               Show this help
+  -t                       Sort by last updated (default: name)
+  -r                       Reverse order
+  -e, --extension          Show primary language (short format, e.g., .py)
+  -E, --extension-long     Show primary language (long format, e.g., Python)
+  -i, --icon               Show primary language as NerdFont icon
+
+Project file options:
+  -l                       Long listing (like 'ls -l')
+  -a                       Include dot files
+  --tree                   Recursive tree view
+
+Examples:
+  lsgit
+  lsgit -t -r -E
+  lsgit myproject -l
+  lsgit myproject/dirname --tree
+EOF
+}
+
+# Default options
+SORT="name"
+REVERSE=false
+EXTENSION=false
+EXT_FORMAT="short" 
+LIST_FILES=false
+LONG_LIST=false
+ALL_FILES=false
+TREE=false
+
+# Parse options
+ARGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help) print_help; exit 0 ;;
+        -t) SORT="updated" ;;
+        -r) REVERSE=true ;;
+        -e|--extension) EXTENSION=true; EXT_FORMAT="short" ;;
+        -E|--extension-long) EXTENSION=true; EXT_FORMAT="long" ;;
+        -i|--icon) EXTENSION=true; EXT_FORMAT="icon" ;;
+        -l) LONG_LIST=true ;;
+        -a) ALL_FILES=true ;;
+        --tree) TREE=true ;;
+        *) ARGS+=("$1") ;;
+    esac
+    shift
+done
+
+# Determine mode
+if [[ ${#ARGS[@]} -eq 0 ]]; then
+    # --- Repo listing ---
+    [[ -z "$GITHUB_PAT" || -z "$GITHUB_USER" ]] && emoji_error "Missing configuration in $CONFIG_FILE. Please run gitconf." && exit 1
+
+    repos=$(curl -s -H "Authorization: token $GITHUB_PAT" \
+        "https://api.github.com/users/$GITHUB_USER/repos?per_page=100")
+
+    names=($(echo "$repos" | jq -r '.[].name'))
+    urls=($(echo "$repos" | jq -r '.[].html_url'))
+
+    langs=()
+    branches=()
+    syncs=()
+    statuses=()
+
+    for repo in "${names[@]}"; do
+        # Primary language
+        langjson=$(curl -s -H "Authorization: token $GITHUB_PAT" \
+                   "https://api.github.com/repos/$GITHUB_USER/$repo/languages")
+        [[ "$EXTENSION" == true ]] && langs+=("$(primary_language "$langjson" "$EXT_FORMAT")") || langs+=("")
+
+        # Repo local info if cloned
+        if [[ -d "$repo/.git" ]]; then
+            cd "$repo"
+            branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')
+            ahead=$(git rev-list --count @{u}..HEAD 2>/dev/null || echo 0)
+            behind=$(git rev-list --count HEAD..@{u} 2>/dev/null || echo 0)
+            sync=""
+            [[ $ahead -gt 0 ]] && sync+="▲$ahead "
+            [[ $behind -gt 0 ]] && sync+="▼$behind "
+            [[ -z $sync ]] && sync="✔"
+            status="✅ Clean"
+            [[ -n "$(git status --porcelain 2>/dev/null)" ]] && status="⚠️ Dirty"
+            cd - >/dev/null
+        else
+            branch="-"
+            sync="-"
+            status="-"
+        fi
+        branches+=("$branch")
+        syncs+=("$sync")
+        statuses+=("$status")
+    done
+
+    # Combine entries
+    list=()
+    for i in "${!names[@]}"; do
+        entry="${names[$i]}"
+        [[ "$EXTENSION" == true ]] && entry="$entry (${langs[$i]})"
+        list+=("$entry|${branches[$i]}|${syncs[$i]}|${statuses[$i]}|${urls[$i]}")
+    done
+
+    # Sort
+    if [[ "$SORT" == "updated" ]]; then
+        updated=($(echo "$repos" | jq -r '.[].updated_at'))
+        for i in "${!list[@]}"; do
+            list[i]="${updated[i]}|${list[i]}"
+        done
+        list=($(printf "%s\n" "${list[@]}" | sort))
+        list=($(printf "%s\n" "${list[@]}" | cut -d'|' -f2-))
+    else
+        list=($(printf "%s\n" "${list[@]}" | sort))
+    fi
+
+    [[ "$REVERSE" == true ]] && list=($(printf "%s\n" "${list[@]}" | tac))
+
+    # Print
+    maxlen=0
+    for entry in "${list[@]}"; do
+        name=$(echo "$entry" | cut -d'(' -f1)
+        (( ${#name} > maxlen )) && maxlen=${#name}
+    done
+
+    printf "%-${maxlen}s  %-15s %-10s %-10s %s\n" "NAME" "BRANCH" "SYNC" "STATUS" "URL"
+    printf "%-${maxlen}s  %-15s %-10s %-10s %s\n" "----" "------" "----" "------" "---"
+
+    for entry in "${list[@]}"; do
+        name=$(echo "$entry" | cut -d'|' -f1)
+        branch=$(echo "$entry" | cut -d'|' -f2)
+        sync=$(echo "$entry" | cut -d'|' -f3)
+        status=$(echo "$entry" | cut -d'|' -f4)
+        url=$(echo "$entry" | cut -d'|' -f5)
+        printf "%-${maxlen}s  %-15s %-10s %-10s %s\n" "$name" "$branch" "$sync" "$status" "$url"
+    done
+
+else
+    # --- Project file listing ---
+    proj="${ARGS[0]}"
+    dir="."
+    [[ -d "$proj" ]] && dir="$proj"
+    [[ -f "$proj" ]] && dir="$(dirname "$proj")"
+
+    if [[ "$TREE" == true ]]; then
+        tree_recursive() {
+            local prefix="$1"
+            local folder="$2"
+            local files=("$folder"/*)
+            [[ "$ALL_FILES" == true ]] && files=("$folder"/.* "$folder"/*)
+            for f in "${files[@]}"; do
+                [[ ! -e "$f" ]] && continue
+                echo "${prefix}$(basename "$f")"
+                [[ -d "$f" ]] && tree_recursive "  $prefix" "$f"
+            done
+        }
+        tree_recursive "" "$dir"
+    else
+        args=()
+        [[ "$LONG_LIST" == true ]] && args+=("-l")
+        [[ "$ALL_FILES" == true ]] && args+=("-a")
+        ls "${args[@]}" "$dir"
+    fi
+fi
+

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# cdb - change git branch
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+usage() {
+    cat <<EOF
+Usage: cdb <branch-name>
+Change to the specified branch.
+
+Options:
+  -h, --help    Show this help message
+EOF
+}
+
+[[ $1 == "-h" || $1 == "--help" ]] && { usage; exit 0; }
+
+branch="$1"
+[[ -z $branch ]] && { emoji_error "Please provide a branch name."; exit 1; }
+
+if git show-ref --verify --quiet "refs/heads/$branch"; then
+    git checkout "$branch"
+    emoji_success "Switched to branch '$branch' $(nf_branch)."
+else
+    emoji_error "Branch '$branch' does not exist $(nf_branch)."
+    exit 1
+fi
+

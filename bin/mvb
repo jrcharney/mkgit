@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# mvb - rename a branch
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+usage() {
+    cat <<EOF
+Usage: mvb old-branch new-branch
+Renames a branch. Cannot rename the current branch.
+EOF
+}
+
+[[ $1 == "-h" || $1 == "--help" ]] && { usage; exit 0; }
+
+old_branch="$1"
+new_branch="$2"
+
+[[ -z $old_branch || -z $new_branch ]] && { emoji_error "Provide old and new branch names."; exit 1; }
+
+current=$(git rev-parse --abbrev-ref HEAD)
+
+if [[ $old_branch == "$current" ]]; then
+    emoji_error "Cannot rename the current branch. Switch branches first."
+    exit 1
+fi
+
+git branch -m "$old_branch" "$new_branch"
+emoji_success "$(nf_branch) Branch '$old_branch' renamed to '$new_branch'."
+

@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# gitconf - Configure Git and mkgit environment
+
+HELPERS_DIR="$HOME/.mkgit/helpers"
+[[ -f "$HELPERS_DIR/emoji_helper.sh" ]] && source "$HELPERS_DIR/emoji_helper.sh"
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+GITCONFIG_FILE="$HOME/.gitconfig"
+
+emoji_info "Welcome to GitConf, the smart way to set up your GitHub workflow."
+emoji_info "Before we begin, we will ask a few questions."
+
+# --- Check for GitHub CLI first ---
+if command -v gh >/dev/null 2>&1; then
+    emoji_success "GitHub CLI (gh) detected."
+    read -rp "Would you like to integrate GitHub CLI (gh) with git? (Y/n): " GH_CHOICE
+    GH_CHOICE=${GH_CHOICE:-yes}
+else
+    emoji_warning "GitHub CLI (gh) not found."
+    read -rp "Would you like to quit gitconf and install gh first? (Y/n): " GH_INSTALL
+    GH_INSTALL=${GH_INSTALL:-yes}
+    if [[ "$GH_INSTALL" =~ ^[Yy]$ ]]; then
+        OS_TYPE=$(uname -s)
+        case "$OS_TYPE" in
+            Linux*)
+                if [[ -f /etc/os-release ]]; then
+                    . /etc/os-release
+                    if [[ "$ID" =~ (ubuntu|debian) ]]; then
+                        echo "Install gh: sudo apt install gh"
+                    elif [[ "$ID" =~ (fedora|centos|rhel) ]]; then
+                        echo "Install gh: sudo dnf install gh"
+                    elif [[ "$ID" =~ arch ]]; then
+                        echo "Install gh: sudo pacman -S github-cli"
+                    else
+                        echo "Please follow https://cli.github.com/manual/installation"
+                    fi
+                fi
+                ;;
+            Darwin*)
+                echo "Install gh via Homebrew: brew install gh"
+                ;;
+            *)
+                echo "Please follow https://cli.github.com/manual/installation"
+                ;;
+        esac
+        exit 0
+    fi
+fi
+
+# --- Backup existing gitconfig ---
+if [[ -f "$GITCONFIG_FILE" ]]; then
+    cp "$GITCONFIG_FILE" "${GITCONFIG_FILE}.bak.$(date +%Y%m%d%H%M%S)"
+    emoji_success "Backup of existing gitconfig created."
+fi
+
+# --- Ask for Git user info ---
+read -rp "Enter your Git user name: " GIT_NAME
+read -rp "Enter your Git email: " GIT_EMAIL
+
+# --- Color output ---
+read -rp "Enable color output? (default: yes) [Y/n]: " COLOR_CHOICE
+COLOR_CHOICE=${COLOR_CHOICE:-yes}
+
+# --- Default branch ---
+read -rp "Default branch name (default: main): " DEFAULT_BRANCH
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+
+# --- PAT setup ---
+emoji_info "If you have a GitHub Personal Access Token (PAT), we can store it securely."
+read -rp "Do you have a PAT ready? (Y/n): " PAT_READY
+PAT_READY=${PAT_READY:-yes}
+if [[ "$PAT_READY" =~ ^[Yy]$ ]]; then
+    read -rp "Enter your GitHub Personal Access Token: " GITHUB_PAT
+    if [[ ${#GITHUB_PAT} -lt 20 ]]; then
+        emoji_warning "PAT looks short; please verify."
+    fi
+    mkdir -p "$(dirname "$CONFIG_FILE")"
+    cat > "$CONFIG_FILE" <<EOF
+[github]
+token = $GITHUB_PAT
+EOF
+    emoji_success "PAT saved to $CONFIG_FILE"
+fi
+
+# --- Write ~/.gitconfig ---
+cat > "$GITCONFIG_FILE" <<EOF
+[user]
+    name = $GIT_NAME
+    email = $GIT_EMAIL
+[color]
+    ui = ${COLOR_CHOICE,,}
+[init]
+    defaultBranch = $DEFAULT_BRANCH
+EOF
+
+# --- Add GH credential helper if requested ---
+if [[ "$GH_CHOICE" =~ ^[Yy]$ ]] && command -v gh >/dev/null 2>&1; then
+    git config --global credential."https://github.com".helper \
+        "!$(which gh) auth git-credential"
+    emoji_success "GitHub CLI credential helper added."
+fi
+
+# --- Closing message ---
+emoji_success "GitConf setup complete."
+emoji_info "For help, run 'githelp' or visit our github repo at https://www.github.com/jrcharney/mkgit."
+

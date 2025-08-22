@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# diffb - compare two branches
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+usage() {
+    cat <<EOF
+Usage: diffb [options] branch-a branch-b
+Compare two git branches.
+
+Options:
+  -h, --help        Show this help
+  -t, --test        Test if branches are identical
+  -d, --diff        Test if branches are different
+  -s, --side        Side-by-side comparison (width auto-detected)
+EOF
+}
+
+# Show help if requested
+[[ $1 == "-h" || $1 == "--help" ]] && { usage; exit 0; }
+
+OPT=""
+while [[ $# -gt 0 && "$1" == -* ]]; do
+    case "$1" in
+        -t|--test) OPT="test" ;;
+        -d|--diff) OPT="diff" ;;
+        -s|--side) OPT="side" ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage; exit 1 ;;
+    esac
+    shift
+done
+
+branch_a="$1"
+branch_b="$2"
+
+[[ -z $branch_a || -z $branch_b ]] && { emoji_error "Provide two branches to compare."; exit 1; }
+
+case "$OPT" in
+    test)
+        git diff --quiet "$branch_a" "$branch_b" && emoji_success "Branches are identical." || emoji_error "Branches differ."
+        ;;
+    diff)
+        git diff --quiet "$branch_a" "$branch_b" && emoji_error "Branches are identical." || emoji_success "Branches differ."
+        ;;
+    side)
+        width=$(tput cols 2>/dev/null || echo 80)
+        git diff --color=always "$branch_a" "$branch_b" | pr -TW"$width"
+        ;;
+    "")
+        git diff --color=always "$branch_a" "$branch_b"
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac
+

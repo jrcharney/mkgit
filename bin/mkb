@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# mkb - create a new branch
+
+CONFIG_FILE="$HOME/.config/mkgit.conf"
+HELPERS_DIR="$HOME/.mkgit/helpers"
+EMOJI_HELPER="$HELPERS_DIR/emoji_helper.sh"
+NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
+
+[[ -f "$EMOJI_HELPER" ]] && source "$EMOJI_HELPER"
+[[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
+
+[[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
+source "$CONFIG_FILE"
+
+usage() {
+    cat <<EOF
+Usage: mkb [new-branch] [based-on-branch]
+Creates a new branch. If based-on-branch is omitted, uses current branch.
+EOF
+}
+
+[[ $1 == "-h" || $1 == "--help" ]] && { usage; exit 0; }
+
+new_branch="$1"
+base_branch="${2:-$(git rev-parse --abbrev-ref HEAD)}"
+
+[[ -z $new_branch ]] && { emoji_error "Please provide a new branch name."; exit 1; }
+
+git checkout -b "$new_branch" "$base_branch"
+emoji_success "$(nf_branch) New branch '$new_branch' created based on '$base_branch'. Switched to '$new_branch'."
+
