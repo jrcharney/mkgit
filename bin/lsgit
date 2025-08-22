@@ -12,7 +12,6 @@ NERDFONT_HELPER="$HELPERS_DIR/nerdfont_helper.sh"
 [[ -f "$NERDFONT_HELPER" ]] && source "$NERDFONT_HELPER"
 
 [[ ! -f "$CONFIG_FILE" ]] && emoji_error "Missing configuration file: $CONFIG_FILE. Please run ~/.mkgit/gitconf first." && exit 1
-source "$CONFIG_FILE"
 
 print_help() {
 cat <<EOF
