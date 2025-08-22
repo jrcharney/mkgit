@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Logs
+*.log
+
+# Editor files
+.vscode/
+.idea/
+
+# mkgit cache or temp files
+.mkgit/temp/
