@@ -2,15 +2,14 @@
 
 `mkgit` is a collection of Bash scripts designed to simplify GitHub repository creation, branch management, `.gitignore` and license setup, and visualizing repository history in the terminal.
 
+The goal of this project is to make using Git more plain-English and less Nerd jargon.
+Pushing, pulling, and commits are easy, but branching and moving back and forth in the commit can be clumsy for a lot of users. And then there are those time were you really screw up and you panic thinking you deleted everything.
+
+With these scripts I hope to address some of those problems, especially if you take a break and forget how to use stuff later.
+
 ## Requirements
 
 Before installing `mkgit`, ensure your system meets the following requirements:
-
-- **Bash** – scripts are written in Bash
-- **Git** – for repository management
-- **Optional:** GitHub CLI (`gh`) for GitHub integration
-- **Terminal** – supports UTF-8 characters and emojis
-- **Font** – NerdFont or other font that supports required glyphs
 
 - `git` for repository management
 - `gh` GitHub CLI (recommended) for GitHub integration
@@ -108,6 +107,14 @@ githelp mklicense   # Show mklicense options
 githelp mkignore    # Show mkignore options
 githelp gitrail     # Show gitrail options
 ```
+
+---
+
+## Future features
+
+- [ ] Moving forward and backwards in git commits.
+- [ ] Fast Forward. (No more accidently running over previous commits)
+- [ ] Rewind. Move backward.
 
 ---
 
