@@ -36,6 +36,21 @@ export PATH="$PATH:$HOME/.mkgit/bin"
 
 You can add this line to your `~/.bashrc` or `~/.zshrc` to make it permanent.
 
+Better yet, add this to your `~/.bashrc` or `~/.zshrc` file so it doesn't add a duplicate.
+
+```bash 
+# Add ~/.mkgit/bin to PATH only if not already in PATH
+[[ ":$PATH:" != *":$HOME/.mkgit/bin:"* ]] && export PATH="$PATH:$HOME/.mkgit/bin"
+```
+
+And then source your `~/.bashrc` or `~/.zshrc` file.
+
+```bash
+source ~/.bashrc    # for Bash
+
+source ~/.zshrc     # for Zsh
+```
+
 ---
 
 ## Setup
