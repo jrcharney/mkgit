@@ -130,6 +130,14 @@ githelp gitrail     # Show gitrail options
 - [ ] Moving forward and backwards in git commits.
 - [ ] Fast Forward. (No more accidently running over previous commits)
 - [ ] Rewind. Move backward.
+- [ ] Stop pushing to `main` for everything.
+  - Consider a more professional workflow: `development -> feature -> testing -> production (main)`
+  - See https://stackoverflow.com/questions/15072243/git-with-development-staging-and-production-branches
+  - See https://nvie.com/posts/a-successful-git-branching-model/
+  - [ ] Have a script set up these branches and start using them in this project.
+- [ ] Time managment integrations, probably with taskwarrior. (likely a separate project)
+- [ ] Virtual environemnt set up for Python. (separate project)
+- [ ] getter Icons in `gitrail` (I though this would make a subway map.)
 
 ---
 
